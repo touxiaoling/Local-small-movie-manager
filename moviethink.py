@@ -110,15 +110,15 @@ class MvFile:
         def thread_checkplay():
             begin_time=time.time()
             p = subprocess.Popen("%s %s"%(player,self.pn.resolve()))#异步
-            while True:
-                return_code=p.poll()
-                if return_code is None:
-                    time.sleep(1)
-                    if waitcmd is not None:
-                        waitcmd(time.time()-begin_time+self.check_time)
-                else:
-                    break
+            i=0
+            while p.poll() is None:
+                i=(1+i)%10
+                time.sleep(0.1)
+                if (waitcmd is not None) and i==0:
+                    waitcmd(time.time()-begin_time+self.check_time)
+
             self.check_time+=time.time()-begin_time
+            waitcmd(self.check_time)
             self.gsave()
         threading.Thread(target=thread_checkplay).start()
         '''
@@ -179,12 +179,12 @@ def doubletree(event):
     pp[selectkey].mf[0].last_see_time=time.time()
     pp[selectkey].mf[0].gsave()
 
-    showthing=pp[selectkey].mf[0].pshow()
+    showthing=pp[selectkey].mf[0].pshow
 
-    tree.item(item,values=showthing)
+    tree.item(item,values=showthing())
     def mywaitcmd(all_check_time):
         newshowthing=[]
-        for i in showthing:
+        for i in showthing():
             newshowthing.append(i)
         newshowthing[4]=time.strftime("%H:%M:%S",time.gmtime(all_check_time))
         tree.item(item,values=newshowthing)
@@ -221,26 +221,34 @@ def inserttree(tree,pp):
                 for i in mf.mf:
                     mykey=i.name
                     pp[mykey]=i
+                    #tree.place_forget()
                     tree.insert(nt,END,text=mykey,values=i.pshow())
+                    #tree.place()
 
     print("begin load")
     for pn in tqdm([x for x in Path(".").iterdir()]):
         threading.Thread(target=insert2,args=(tree,pn)).start()
+def treeview_sort_column(tv,col,reverse):
+    print('sorting %s!' % col)
+    l = [(tv.set(k, col), k) for k in tv.get_children('')]
+    l.sort(reverse=reverse)
 
+    # rearrange items in sorted positions
+    for index, (val, k) in enumerate(l):
+        print('Moving Index:%r, Value:%r, k:%r' % (index, val, k))
+        tv.move(k, '', index)
+
+    # reverse sort next time
+    tv.heading(col, command=lambda: treeview_sort_column(tv, col, not reverse))
 if __name__ == "__main__":
     pp={}
     root = Tk()                     # 创建窗口对象的背景色
     root.geometry("1500x1000")
-    col=["1","2","3","4","5","6"]
+    col=("修改日期","OK","上次观看日期","观看次数","总观看时间","size")
     tree =Treeview(root,height=10,columns=col)
+    for each in col:
+        tree.heading(each,text=each.capitalize(),command=lambda _each=each:treeview_sort_column(tree,_each, False) )
     # tree.column('1',width=50,anchor='center')
-    tree.heading("1", text="修改日期")
-    tree.heading("2", text="OK")
-    tree.heading("3", text="上次观看日期")
-    tree.heading("4", text="观看次数")
-    tree.heading("5", text="总观看时间")
-    tree.heading("6", text="size")
-
 
     sl=Scrollbar(root)
     sl.pack(side = RIGHT,fill=Y)
