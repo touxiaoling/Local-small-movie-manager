@@ -3,17 +3,16 @@
 '''
 todo list
 基本:
-    菜单排序功能(主要是怎么维护树的父子关系不变,以及遍历方式)
-    
+OK 菜单排序功能(首列还不支持排序,需要修改.)
     tkinter GUI 调整刚启动时各行列宽度,尤其是首行的宽度控制.
     portplayer 多项播放接口(估计要重装32bit的)
     电影后缀补完(过滤器完善)
-    加载时间优化(没思路)
+    加载时间优化(没思路,不急,目前的多线程方式基本满足要求.)
 ok  播放时间追踪功能(通过pid追踪来实现)(跨平台支持问题)
-
+    增加删除功能
 进阶:
-    GUI美化(直接更换GUI吧,不然也不知道封面怎么加,不过加封面可是个大工程...这个还得考虑)
-    跨平台支持(播放器等等)
+    GUI美化(直接更换GUI,或者考虑使用JAVA重构吧,不然也不知道封面怎么加,不过加封面可是个大工程...这个还得考虑)(得用C#来实现)
+    跨平台支持(播放器等等,暂时不考虑.)
 '''
 from tkinter import *           # 导入 Tkinter 库
 from tkinter.ttk import *
@@ -24,6 +23,7 @@ import pickle
 import time
 import threading
 import subprocess
+import shutil
 player='PotPlayerMini64.exe'
 
 class MvFile:
@@ -76,6 +76,10 @@ class MvFile:
             self.check_time=savep.check_time
         else:
             self.check_time=0
+        if hasattr(savep,"del_flag"):
+            self.del_flag=savep.del_flag
+        else:
+            self.del_flag=False
     def pshow(self):
 
         if self.like:like="True"
@@ -96,7 +100,10 @@ class MvFile:
         m=s//60%60
         h=s//3600%24
         d=s/3600//24
-        return "%dd%dh%dm"%(d,h,m)
+        if self.del_flag is True:
+            return "%03dd%02dh%02dmD"%(d,h,m)
+        else:    
+            return "%03dd%02dh%02dm"%(d,h,m)
     def _init2(self):
         pass
     def gsave(self):
@@ -151,12 +158,13 @@ class MFile:
             self.name=self.mf[0].name
         else:
             self.name=pn.name
-        
+        self.delfilecheck()
+
     def _mfilter(self,pn):
         if not pn.is_file():return False
         suffix=pn.suffix.strip(".")
-        filter=["mp4","mkv","avi","flv","rmvb"]
-        if suffix not in filter:return False
+        filter=["mp4","mkv","avi","flv","rmvb","wmv","iso","ISO","rm"]
+        if suffix.lower() not in filter:return False
 
         filter=[".unwanted","#recycle",".moviedata"]
         for iterm in filter:
@@ -168,6 +176,26 @@ class MFile:
     def play(self,waitcmd=None):
         self.mf[0].play(waitcmd)
         #希望监听播放时长
+    def delfilecheck(self):
+        if self.mf:
+            if self.mf[0].del_flag:
+                if self.mf[0].last_see_time !=0:
+                    if (time.time()-self.mf[0].last_see_time)//(3600*24) >=7:
+                        print("delfile",self.pshow())
+                        self.delfile(self.pn)
+                        self.mf=[]
+    def delfile(self,pn):
+        if pn.is_file():
+            pn.unlink()
+        else:
+            shutil.rmtree(pn)
+        # for sub in pn.iterdir() :
+        #     if sub.is_dir() :
+        #         self.delfile(sub)
+        #     else :
+        #         sub.unlink()
+        # pn.rmdir()
+        
 
 def doubletree(event):
     items = tree.selection()
@@ -204,9 +232,12 @@ def rightclicktree(event):
     item = tree.identify_row(event.y)
     iidy = int(item[1:],16)    #行号，也叫item， 以字母I开头，第一行是I001
     iidx = int(tree.identify_column(event.x)[1:]) #鼠标点击处的列号， 以#开头， 如#0
-    selectkey=(tree.item(item, "text"))
+    selectkey=tree.item(item, "text")
     if iidx==2:
         pp[selectkey].mf[0].like = not pp[selectkey].mf[0].like
+        tree.item(item,values=pp[selectkey].mf[0].pshow())
+    if iidx==0:
+        pp[selectkey].mf[0].del_flag = not pp[selectkey].mf[0].del_flag
         tree.item(item,values=pp[selectkey].mf[0].pshow())
     pp[selectkey].mf[0].gsave()
 
@@ -226,8 +257,9 @@ def inserttree(tree,pp):
                     #tree.place()
 
     print("begin load")
-    for pn in tqdm([x for x in Path(".").iterdir()]):
+    for pn  in tqdm(Path(".").iterdir()):
         threading.Thread(target=insert2,args=(tree,pn)).start()
+
 def treeview_sort_column(tv,col,reverse):
     print('sorting %s!' % col)
     l = [(tv.set(k, col), k) for k in tv.get_children('')]
