@@ -53,7 +53,11 @@ class MvFile:
     def _gload(self,load_path):
         if(Path(load_path).exists()):
             with open(load_path,"rb") as f:
-                savep=pickle.load(f)
+                try:
+                    savep=pickle.load(f)
+                except Exception as ex:
+                    print(load_path,ex)
+                    exit()
         else:
             savep=None
 
